@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { HandLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
+import "./App.css";
+import "./css/Fancy.css";
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -8,6 +10,8 @@ export default function App() {
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   const [currentGesture, setCurrentGesture] = useState("Fist");
+  const [currentHand, setCurrentHand] = useState("No Hand");
+  const [isFacing, setIsFacing] = useState("No Hand");
   const [loading, setLoading] = useState(true);
 
   // -----------------------------
@@ -32,17 +36,41 @@ export default function App() {
     return extended >= 4;
   };
 
-  const isWritingPose = (lm: NormalizedLandmark[]): boolean =>
+  const isPointing = (lm: NormalizedLandmark[]): boolean =>
     lm[8].y < lm[6].y &&
     lm[12].y > lm[10].y &&
     lm[16].y > lm[14].y &&
     lm[20].y > lm[18].y;
 
-  const isTwoFingersUp = (lm: NormalizedLandmark[]): boolean =>
-    lm[8].y < lm[6].y &&
-    lm[12].y < lm[10].y &&
-    lm[16].y > lm[14].y &&
-    lm[20].y > lm[18].y;
+  const isTwoFingersUp = (lm: NormalizedLandmark[]): boolean => {
+    const fingers = [
+      { tip: 8, pip: 6 },
+      { tip: 12, pip: 10 },
+      { tip: 16, pip: 14 },
+      { tip: 20, pip: 18 },
+    ];
+
+    let extended = 0;
+
+    fingers.forEach(({ tip, pip }) => {
+      if (lm[tip].y < lm[pip].y) extended++;
+    });
+    
+    return extended == 2; };
+
+  const getPalmOrientation = (lm: NormalizedLandmark[], handedness: string) => {
+    const thumbX = lm[4].x;
+    const pinkyX = lm[20].x;
+
+    if (handedness === "Right") {
+      return thumbX < pinkyX ? true : false;
+    } else if (handedness === "Left") {
+      return thumbX > pinkyX ? true : false;
+    }
+    
+    setIsFacing("Unknown")
+    return;
+  };
 
   // -----------------------------
   // Main effect
@@ -73,7 +101,7 @@ export default function App() {
       handLandmarker = await HandLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath:
-          "hand_landmarker.task",
+          "/hand_landmarker.task",
       },
       numHands: 1,
       runningMode: "VIDEO",
@@ -82,11 +110,6 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
       video.play();
-
-      animationFrame = requestAnimationFrame(loop);
-
-    // Delay init so refs exist
-    setTimeout(() => init(), 0);
 
       setLoading(false);
       animationFrame = requestAnimationFrame(loop);
@@ -133,35 +156,63 @@ export default function App() {
       const results = handLandmarker.detectForVideo(video, performance.now());
 
       let gesture = "Fist";
+      let handedness = "Unknown";
 
       if (results.landmarks && results.landmarks.length > 0) {
         const hand = results.landmarks[0];
 
         if (isTwoFingersUp(hand)) gesture = "Two Fingers Up";
-        else if (isWritingPose(hand)) gesture = "Point";
+        else if (isPointing(hand)) gesture = "Point";
         else if (isPalmOpen(hand)) gesture = "Palm";
 
         setCurrentGesture(gesture);
 
         //draw landmarks
         drawLandmarks(ctx, hand, canvas.width, canvas.height);
+
+      } else {
+        // Clear canvas when no hand detected
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setCurrentGesture("No hand detected");
       }
 
+      if (results.handedness && results.handedness.length > 0) {
+        handedness = results.handedness[0][0].categoryName; 
+        setCurrentHand(handedness)
+
+        if (results.landmarks && results.landmarks.length > 0) {
+          const hand = results.landmarks[0]; 
+          setIsFacing(getPalmOrientation(hand, handedness) ? "Back" : "Front");
+        }
+      }
+
+
       animationFrame = requestAnimationFrame(loop);
+
     };
 
-    init();
+    setTimeout(() => init(), 0);
 
     return () => cancelAnimationFrame(animationFrame);
   }, []);
 
   return (
     <div>
-      <video ref={videoRef} autoPlay playsInline width={900} height={480} />
-      <canvas ref={canvasRef} width={900} height={480} />
-      {loading && <div>Loading hand tracker…</div>}
+      <nav className="navbar">
+        Gesture:
+        <div>{currentGesture}</div>
+        Hand:
+        <div>{currentHand}</div>
+        Rotation:
+        <div>{isFacing}</div>
+      </nav>
+      <div className="video-container">
+        <video ref={videoRef} autoPlay playsInline width={1280} height={720} />
+        <canvas ref={canvasRef} width={1280} height={720} />
+      </div>
 
-      <div>{currentGesture}</div>
+      {loading && <div>Loading hand tracker…</div>}
+      <div className="output-text">{currentGesture}</div>
     </div>
   );
 }

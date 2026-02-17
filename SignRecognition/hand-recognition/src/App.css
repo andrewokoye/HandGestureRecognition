@@ -1,7 +1,25 @@
-video, canvas {
+.video-container {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+}
+
+.video-container video,
+.video-container canvas {
   position: absolute;
   top: 0;
   left: 0;
+  width: 1280px;
+  height: 720px;
+  object-fit: cover;
+}
+
+.video-container canvas {
+  transform: scaleX(-1);
+}
+
+.output-text {
+  font-size: 5em;
 }
 
 #root {
