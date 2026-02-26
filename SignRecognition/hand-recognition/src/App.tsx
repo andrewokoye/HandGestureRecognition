@@ -13,6 +13,9 @@ export default function App() {
   const [currentHand, setCurrentHand] = useState("No Hand");
   const [isFacing, setIsFacing] = useState("No Hand");
   const [loading, setLoading] = useState(true);
+  const [xvalue, setXValue] = useState(0);
+  const [yvalue, setYValue] = useState(0);
+  const [zvalue, setZValue] = useState(0);
 
   // -----------------------------
   // Gesture helpers (fully typed)
@@ -55,6 +58,10 @@ export default function App() {
     fingers.forEach(({ tip, pip }) => {
       if (lm[tip].y < lm[pip].y) extended++;
     });
+
+    setXValue(lm[0].x);
+    setYValue(lm[0].y);
+    setZValue(lm[0].z);
     
     return extended == 2; };
 
@@ -205,6 +212,12 @@ export default function App() {
         <div>{currentHand}</div>
         Rotation:
         <div>{isFacing}</div>
+        X:
+        <div>{xvalue}</div>
+        Y:
+        <div>{yvalue}</div>
+        Z:
+        <div>{zvalue}</div>
       </nav>
       <div className="video-container">
         <video ref={videoRef} autoPlay playsInline width={1280} height={720} />
