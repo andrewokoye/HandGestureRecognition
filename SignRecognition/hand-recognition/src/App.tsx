@@ -13,10 +13,16 @@ export default function App() {
   const [currentHand, setCurrentHand] = useState("No Hand");
   const [isFacing, setIsFacing] = useState("No Hand");
   const [loading, setLoading] = useState(true);
-  const [xvalue, setXValue] = useState(0);
-  const [yvalue, setYValue] = useState(0);
-  const [zvalue, setZValue] = useState(0);
-
+  const [xValue, setXValue] = useState(0);
+  const [tick, setTick] = useState(0);
+  const lastReset = useRef(performance.now());
+  const  xAggregate = useRef(0);
+  const  yAggregate = useRef(0);  
+  const  prevX = useRef(0);
+  const  prevY = useRef(0);
+  const [yValue, setYValue] = useState(0);
+  const [zValue, setZValue] = useState(0);
+  const [helloDone, setHelloDone] = useState(false);
   // -----------------------------
   // Gesture helpers (fully typed)
   // -----------------------------
@@ -58,10 +64,6 @@ export default function App() {
     fingers.forEach(({ tip, pip }) => {
       if (lm[tip].y < lm[pip].y) extended++;
     });
-
-    setXValue(lm[0].x);
-    setYValue(lm[0].y);
-    setZValue(lm[0].z);
     
     return extended == 2; };
 
@@ -145,6 +147,41 @@ export default function App() {
       }
     };
 
+    const updatePoints = (lm: NormalizedLandmark[]) => {
+      
+      const currentX = (lm[0].x + lm[5].x + lm[9].x) / 3;
+      const currentY = (lm[0].y + lm[5].y + lm[9].y) / 3;
+
+      if (prevX.current === 0 && prevY.current === 0) {
+        prevX.current = (lm[0].x + lm[5].x + lm[9].x) / 3;
+        prevY.current = (lm[0].y + lm[5].y + lm[9].y) / 3;
+        return;
+      }
+
+      // compute deltas using refs, not statea
+      const deltaX = Math.abs(currentX - prevX.current);
+      const deltaY = Math.abs(currentY - prevY.current);
+
+      if(deltaX > 0.01)
+        xAggregate.current += deltaX;
+      if(deltaY > 0.01)
+        yAggregate.current += deltaY;
+
+      // update refs for next frame
+      prevX.current = currentX;
+      prevY.current = currentY;
+
+      // update state AFTER calculations
+      setXValue(currentX);
+      setYValue(currentY);
+      setZValue(lm[0].z);
+
+      // reset if too large
+      if (xAggregate.current > 1) xAggregate.current = 0;
+      if (yAggregate.current > 1) yAggregate.current = 0;
+
+    }
+
     const loop = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -174,6 +211,10 @@ export default function App() {
 
         setCurrentGesture(gesture);
 
+        if (gesture == "Palm") {
+          updatePoints(hand);
+        }
+
         //draw landmarks
         drawLandmarks(ctx, hand, canvas.width, canvas.height);
 
@@ -193,6 +234,19 @@ export default function App() {
         }
       }
 
+      if (tick % 5 === 0) {
+        setTick(t => t + 1);
+      }
+
+      if (xAggregate.current >= 0.11 && yAggregate.current < 0.01)
+        setHelloDone(true);
+      
+      const now = performance.now();
+      if ((now - lastReset.current >= 1000) && !helloDone) { // 1000 ms = 1 second
+        xAggregate.current = 0;
+        yAggregate.current = 0;
+        lastReset.current = now;
+      }
 
       animationFrame = requestAnimationFrame(loop);
 
@@ -213,19 +267,26 @@ export default function App() {
         Rotation:
         <div>{isFacing}</div>
         X:
-        <div>{xvalue}</div>
+        <div>{xValue}</div>
         Y:
-        <div>{yvalue}</div>
+        <div>{yValue}</div>
+        X Agg:
+        <div>{xAggregate.current}</div>
+        Y Agg:
+        <div>{yAggregate.current}</div>
         Z:
-        <div>{zvalue}</div>
+        <div>{zValue}</div>
       </nav>
+      {!helloDone && (
+      <>
       <div className="video-container">
         <video ref={videoRef} autoPlay playsInline width={1280} height={720} />
         <canvas ref={canvasRef} width={1280} height={720} />
       </div>
-
       {loading && <div>Loading hand tracker…</div>}
       <div className="output-text">{currentGesture}</div>
+      </>)}
+      {helloDone && <div className="output-text">Hello detected</div>}
     </div>
   );
 }
